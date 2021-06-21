@@ -37,8 +37,8 @@ type DataFrame struct {
 
 // New is the generic DataFrame constructor
 func New(se ...series.Series) DataFrame {
-	if se == nil || len(se) == 0 {
-		return DataFrame{Err: fmt.Errorf("Missing Columns")}
+	if len(se) == 0 {
+		return DataFrame{Err: fmt.Errorf("missing columns")}
 	}
 
 	columns := make([]series.Series, len(se))
@@ -246,7 +246,7 @@ func (df DataFrame) print(
 			}
 		}
 		if i < len(notShowing) {
-			notShownArr = append(notShownArr, notShowing[i:len(notShowing)])
+			notShownArr = append(notShownArr, notShowing[i:])
 		}
 		for k, ns := range notShownArr {
 			notShown += strings.Join(ns, ", ")
@@ -512,7 +512,7 @@ func (a DataFrame) Merge(b DataFrame, order ...Order) DataFrame {
 	if b.Err != nil {
 		return DataFrame{Err: b.Err}
 	}
-	if order == nil || len(order) == 0 {
+	if len(order) == 0 {
 		return DataFrame{Err: fmt.Errorf("Merge: no order arguments")}
 	}
 
@@ -654,7 +654,7 @@ func (df DataFrame) Arrange(order ...Order) DataFrame {
 	if df.Err != nil {
 		return df
 	}
-	if order == nil || len(order) == 0 {
+	if len(order) == 0 {
 		return DataFrame{Err: fmt.Errorf("Arrange: no order arguments")}
 	}
 
@@ -1965,20 +1965,20 @@ func findInStringSlice(str string, s []string) int {
 
 func parseSelectIndexes(l int, indexes SelectIndexes, colnames []string) ([]int, error) {
 	var idx []int
-	switch indexes.(type) {
+	switch indexes := indexes.(type) {
 	case []int:
-		idx = indexes.([]int)
+		idx = indexes
 	case []int64:
-		ints := indexes.([]int64)
+		ints := indexes
 		for _, v := range ints {
 			idx = append(idx, int(v))
 		}
 	case int:
-		idx = []int{indexes.(int)}
+		idx = []int{indexes}
 	case int64:
-		idx = []int{int(indexes.(int64))}
+		idx = []int{int(indexes)}
 	case []bool:
-		bools := indexes.([]bool)
+		bools := indexes
 		if len(bools) != l {
 			return nil, fmt.Errorf("indexing error: index dimensions mismatch")
 		}
@@ -1988,14 +1988,14 @@ func parseSelectIndexes(l int, indexes SelectIndexes, colnames []string) ([]int,
 			}
 		}
 	case string:
-		s := indexes.(string)
+		s := indexes
 		i := findInStringSlice(s, colnames)
 		if i < 0 {
 			return nil, fmt.Errorf("can't select columns: column name %q not found", s)
 		}
 		idx = append(idx, i)
 	case []string:
-		xs := indexes.([]string)
+		xs := indexes
 		for _, s := range xs {
 			i := findInStringSlice(s, colnames)
 			if i < 0 {
@@ -2004,7 +2004,7 @@ func parseSelectIndexes(l int, indexes SelectIndexes, colnames []string) ([]int,
 			idx = append(idx, i)
 		}
 	case series.Series:
-		s := indexes.(series.Series)
+		s := indexes
 		if err := s.Err; err != nil {
 			return nil, fmt.Errorf("indexing error: Series has errors: %v", err)
 		}
@@ -2015,17 +2015,17 @@ func parseSelectIndexes(l int, indexes SelectIndexes, colnames []string) ([]int,
 		case series.Int:
 			ints, err := s.Int()
 			if err != nil {
-				return nil, fmt.Errorf("Int series indexing error: %v", err)
+				return nil, fmt.Errorf("series.Int indexing error: %v", err)
 			}
 			return parseSelectIndexes(l, ints, colnames)
 		case series.Bool:
 			bools, err := s.Bool()
 			if err != nil {
-				return nil, fmt.Errorf("Bool series indexing error: %v", err)
+				return nil, fmt.Errorf("series.Bool indexing error: %v", err)
 			}
 			return parseSelectIndexes(l, bools, colnames)
 		case series.String:
-			xs, _ := indexes.(series.Series).Records(true)
+			xs, _ := indexes.Records(true)
 			return parseSelectIndexes(l, xs, colnames)
 		default:
 			return nil, fmt.Errorf("indexing error: unsupported indexing type %q", s.Type())
