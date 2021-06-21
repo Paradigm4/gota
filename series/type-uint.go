@@ -6,15 +6,14 @@ import (
 	"strconv"
 )
 
-type IntElement struct {
-	e     int64 // https://golang.org/ref/spec#Numeric_types forcing to be int64
+type uintElement struct {
+	e     uint64 // https://golang.org/ref/spec#Numeric_types forcing to be uint64
 	valid bool
-	nan   bool // bookkeeping
+	nan   bool
 }
 
-func (e *IntElement) Set(value interface{}) error {
+func (e *uintElement) Set(value interface{}) error {
 	e.valid = true
-	e.nan = false
 	if value == nil {
 		e.valid = false
 		return nil
@@ -29,7 +28,7 @@ func (e *IntElement) Set(value interface{}) error {
 			e.nan = true
 			return nil
 		default:
-			i, err := strconv.ParseInt(value.(string), 10, 64)
+			i, err := strconv.ParseUint(value.(string), 10, 64)
 			if err != nil {
 				e.nan = true
 				return err
@@ -37,25 +36,25 @@ func (e *IntElement) Set(value interface{}) error {
 			e.e = i
 		}
 	case int:
-		e.e = int64(value.(int))
+		e.e = uint64(value.(int))
 	case int8:
-		e.e = int64(value.(int8))
+		e.e = uint64(value.(int8))
 	case int16:
-		e.e = int64(value.(int16))
+		e.e = uint64(value.(int16))
 	case int32:
-		e.e = int64(value.(int32))
+		e.e = uint64(value.(int32))
 	case int64:
-		e.e = int64(value.(int64))
+		e.e = uint64(value.(int64))
 	case uint:
-		e.e = int64(value.(uint))
+		e.e = uint64(value.(uint))
 	case uint8:
-		e.e = int64(value.(uint8))
+		e.e = uint64(value.(uint8))
 	case uint16:
-		e.e = int64(value.(uint16))
+		e.e = uint64(value.(uint16))
 	case uint32:
-		e.e = int64(value.(uint32))
+		e.e = uint64(value.(uint32))
 	case uint64:
-		e.e = int64(value.(uint64))
+		e.e = uint64(value.(uint64))
 	case float32:
 		f := float64(value.(float32))
 		if math.IsNaN(f) {
@@ -66,7 +65,7 @@ func (e *IntElement) Set(value interface{}) error {
 			e.nan = true
 			return fmt.Errorf("demoting float Inf to NaN")
 		}
-		e.e = int64(f)
+		e.e = uint64(f)
 	case float64:
 		f := value.(float64)
 		if math.IsNaN(f) {
@@ -77,7 +76,7 @@ func (e *IntElement) Set(value interface{}) error {
 			e.nan = true
 			return fmt.Errorf("demoting float Inf to NaN")
 		}
-		e.e = int64(f)
+		e.e = uint64(f)
 	case bool:
 		b := value.(bool)
 		if b {
@@ -93,7 +92,7 @@ func (e *IntElement) Set(value interface{}) error {
 				e.nan = true
 				return nil
 			}
-			v, err := value.(Element).Int()
+			v, err := value.(Element).Uint()
 			if err != nil {
 				e.valid = false
 				return err
@@ -105,32 +104,32 @@ func (e *IntElement) Set(value interface{}) error {
 		}
 	default:
 		e.valid = false
-		return fmt.Errorf("Unsupported type '%T' conversion to an int64", value)
+		return fmt.Errorf("Unsupported type '%T' conversion to an uint64", value)
 	}
 	return nil
 }
 
-func (e IntElement) Copy() Element {
-	return &IntElement{e: e.e, valid: e.valid, nan: e.nan}
+func (e uintElement) Copy() Element {
+	return &uintElement{e.e, e.valid, e.nan}
 }
 
-func (e IntElement) IsNaN() bool {
+func (e uintElement) IsNaN() bool {
 	return !e.valid || e.nan
 }
 
-func (e IntElement) IsValid() bool {
+func (e uintElement) IsValid() bool {
 	return e.valid
 }
 
-func (e IntElement) IsInf(sign int) bool {
+func (e uintElement) IsInf(sign int) bool {
 	return false
 }
 
-func (e IntElement) Type() Type {
-	return Int
+func (e uintElement) Type() Type {
+	return Uint
 }
 
-func (e IntElement) Val() ElementValue {
+func (e uintElement) Val() ElementValue {
 	if e.valid {
 		if e.nan {
 			return NaNElement{}
@@ -140,7 +139,7 @@ func (e IntElement) Val() ElementValue {
 	return nil
 }
 
-func (e IntElement) String() (string, error) {
+func (e uintElement) String() (string, error) {
 	if e.valid {
 		if e.nan {
 			return NaN, nil
@@ -150,21 +149,21 @@ func (e IntElement) String() (string, error) {
 	return Nil, nil
 }
 
-func (e IntElement) Int() (int64, error) {
+func (e uintElement) Int() (int64, error) {
 	if e.valid && !e.nan {
-		return e.e, nil
+		return int64(e.e), nil
 	}
 	return 0, fmt.Errorf("can't convert nil/nan to int64")
 }
 
-func (e IntElement) Uint() (uint64, error) {
+func (e uintElement) Uint() (uint64, error) {
 	if e.valid && !e.nan {
 		return uint64(e.e), nil
 	}
 	return 0, fmt.Errorf("can't convert nil/nan to uint64")
 }
 
-func (e IntElement) Float() (float64, error) {
+func (e uintElement) Float() (float64, error) {
 	if e.valid {
 		if e.nan {
 			return math.NaN(), nil
@@ -174,17 +173,20 @@ func (e IntElement) Float() (float64, error) {
 	return math.NaN(), fmt.Errorf("can't convert nil to float64")
 }
 
-func (e IntElement) Bool() (bool, error) {
+func (e uintElement) Bool() (bool, error) {
 	if !e.valid || e.nan {
 		return false, fmt.Errorf("can't convert nil/nan to bool")
 	}
-	if e.e == 0 {
+	switch e.e {
+	case 1:
+		return true, nil
+	case 0:
 		return false, nil
 	}
-	return true, nil
+	return false, fmt.Errorf("can't convert Int \"%v\" to bool", e.e)
 }
 
-func (e IntElement) Eq(elem Element) bool {
+func (e uintElement) Eq(elem Element) bool {
 	if e.valid != elem.IsValid() {
 		// xor
 		return false
@@ -196,21 +198,21 @@ func (e IntElement) Eq(elem Element) bool {
 	if elem.IsInf(0) {
 		return false
 	}
-	i, err := elem.Int()
+	i, err := elem.Uint()
 	if err != nil {
 		return false
 	}
 	return e.e == i
 }
 
-func (e IntElement) Neq(elem Element) bool {
+func (e uintElement) Neq(elem Element) bool {
 	if e.valid != elem.IsValid() {
 		return true
 	}
 	return !e.Eq(elem)
 }
 
-func (e IntElement) Less(elem Element) bool {
+func (e uintElement) Less(elem Element) bool {
 	if e.IsNaN() || elem.IsNaN() {
 		return false
 	}
@@ -220,14 +222,14 @@ func (e IntElement) Less(elem Element) bool {
 	if elem.IsInf(1) {
 		return true
 	}
-	i, err := elem.Int()
+	i, err := elem.Uint()
 	if err != nil {
 		return false
 	}
 	return e.e < i
 }
 
-func (e IntElement) LessEq(elem Element) bool {
+func (e uintElement) LessEq(elem Element) bool {
 	if e.IsNaN() || elem.IsNaN() {
 		return false
 	}
@@ -237,14 +239,14 @@ func (e IntElement) LessEq(elem Element) bool {
 	if elem.IsInf(1) {
 		return true
 	}
-	i, err := elem.Int()
+	i, err := elem.Uint()
 	if err != nil || !e.IsValid() {
 		return false
 	}
 	return e.e <= i
 }
 
-func (e IntElement) Greater(elem Element) bool {
+func (e uintElement) Greater(elem Element) bool {
 	if e.IsNaN() || elem.IsNaN() {
 		return false
 	}
@@ -254,14 +256,14 @@ func (e IntElement) Greater(elem Element) bool {
 	if elem.IsInf(1) {
 		return false
 	}
-	i, err := elem.Int()
+	i, err := elem.Uint()
 	if err != nil {
 		return false
 	}
 	return e.e > i
 }
 
-func (e IntElement) GreaterEq(elem Element) bool {
+func (e uintElement) GreaterEq(elem Element) bool {
 	if e.IsNaN() || elem.IsNaN() {
 		return false
 	}
@@ -271,7 +273,7 @@ func (e IntElement) GreaterEq(elem Element) bool {
 	if elem.IsInf(1) {
 		return false
 	}
-	i, err := elem.Int()
+	i, err := elem.Uint()
 	if err != nil {
 		return false
 	}

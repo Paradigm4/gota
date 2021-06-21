@@ -1,11 +1,14 @@
 package series
 
+// need to revisit these test cases for Record(force) and Float(force)
+// add/update tests for HasNaN, HasInvalid, IsNaN, IsInvalid
+
 import (
 	"fmt"
 	"math"
 	"reflect"
-	"testing"
 	"strings"
+	"testing"
 )
 
 // Check that there are no shared memory addreses between the elements of two Series
@@ -51,7 +54,8 @@ func compareFloats(lvalue, rvalue float64, digits int) bool {
 	return lv == rv
 }
 
-func TestSeries_Compare(t *testing.T) {
+// compare Eq, Neq, and In
+func TestSeries_Compare_Eq(t *testing.T) {
 	table := []struct {
 		series     Series
 		comparator Comparator
@@ -77,10 +81,70 @@ func TestSeries_Compare(t *testing.T) {
 			Bools([]bool{false, true, false, false, false}),
 		},
 		{
+			Ints([]string{"", "2", "1", "5", "NaN"}),
+			Eq,
+			"2",
+			Bools([]bool{false, true, false, false, false}),
+		},
+		{
+			Ints([]string{"", "2", "1", "5", "NaN"}),
+			Eq,
+			"",
+			Bools([]bool{true, false, false, false, false}),
+		},
+		{
+			Ints([]string{"", "2", "1", "5", "NaN"}),
+			Eq,
+			"NaN",
+			Bools([]bool{false, false, false, false, false}), // NaN != NaN
+		},
+		{
+			Strings(Ints([]string{"", "2", "1", "5", "NaN"})),
+			Eq,
+			"NaN",
+			Bools([]bool{false, false, false, false, true}), // "NaN" == "NaN"
+		},
+		{
 			Ints([]int{0, 2, 1, 5, 9}),
 			Eq,
 			[]int{0, 2, 0, 5, 10},
 			Bools([]bool{true, true, false, true, false}),
+		},
+		{
+			New([]int{0, 2, 1, 5, 9}, Int, ""),
+			Eq,
+			[]int{0, 2, 0, 5, 10},
+			Bools([]bool{true, true, false, true, false}),
+		},
+		{
+			New([]int{0, 2, 1, 5, 9}, Int, "", 6),
+			Eq,
+			[]int{0, 2, 0, 5, 10, -1},
+			Bools([]bool{true, true, false, true, false, false}),
+		},
+		{
+			New([]uint{0, 2, 1, 5, 9}, Uint, ""),
+			Eq,
+			[]int{0, 2, 0, 5, 10},
+			Bools([]bool{true, true, false, true, false}),
+		},
+		{
+			New([]int{0, 2, 1, -5, 9}, Uint, ""), // -5 converted to uint64 is 18446744073709551611
+			Eq,
+			[]int{0, 2, 0, -5, 10},
+			Bools([]bool{true, true, false, true, false}),
+		},
+		{
+			New([]int{0, 2, 1, -5, 9}, Uint, ""),
+			Eq,
+			[]uint{0, 2, 0, 5, 10},
+			Bools([]bool{true, true, false, false, false}),
+		},
+		{
+			New([]uint8{0, 2, 1, 5, 9}, Uint, "", 6),
+			Eq,
+			[]int{0, 2, 0, 5, 10, -1},
+			Bools([]bool{true, true, false, true, false, false}),
 		},
 		{
 			Floats([]float64{0.1, 2, 1, 5, 9}),
@@ -131,6 +195,18 @@ func TestSeries_Compare(t *testing.T) {
 			Bools([]bool{false, false, true, false, true}),
 		},
 		{
+			Uints([]uint{0, 2, 1, 5, 9}),
+			Neq,
+			"2",
+			Bools([]bool{true, false, true, true, true}),
+		},
+		{
+			Uints([]uint{0, 2, 1, 5, 9}),
+			Neq,
+			[]uint{0, 2, 0, 5, 10},
+			Bools([]bool{false, false, true, false, true}),
+		},
+		{
 			Floats([]float64{0.1, 2, 1, 5, 9}),
 			Neq,
 			"2",
@@ -156,6 +232,100 @@ func TestSeries_Compare(t *testing.T) {
 		},
 		{
 			Strings([]string{"A", "B", "C", "B", "D", "BADA"}),
+			In,
+			"B",
+			Bools([]bool{false, true, false, true, false, false}),
+		},
+		{
+			Strings([]string{"Hello", "world", "this", "is", "a", "test"}),
+			In,
+			[]string{"cat", "world", "hello", "a"},
+			Bools([]bool{false, true, false, false, true, false}),
+		},
+		{
+			Ints([]int{0, 2, 1, 5, 9}),
+			In,
+			"2",
+			Bools([]bool{false, true, false, false, false}),
+		},
+		{
+			Ints([]string{"", "2", "1", "5", "NaN"}),
+			In,
+			"",
+			Bools([]bool{true, false, false, false, false}),
+		},
+		{
+			Ints([]string{"", "2", "1", "5", "NaN"}),
+			In,
+			"NaN",
+			Bools([]bool{false, false, false, false, false}), // NaN != NaN
+		},
+		{
+			Ints([]int{0, 2, 1, 5, 9}),
+			In,
+			[]int{2, 99, 1234, 9},
+			Bools([]bool{false, true, false, false, true}),
+		},
+		{
+			Floats([]float64{0.1, 2, 1, 5, 9}),
+			In,
+			"2",
+			Bools([]bool{false, true, false, false, false}),
+		},
+		{
+			Floats([]float64{0.1, 2, 1, 5, 9}),
+			In,
+			[]float64{2, 99, 1234, 9},
+			Bools([]bool{false, true, false, false, true}),
+		},
+		{
+			Bools([]bool{true, true, false}),
+			In,
+			"true",
+			Bools([]bool{true, true, false}),
+		},
+		{
+			Bools([]bool{true, true, false}),
+			In,
+			[]bool{false, false, false},
+			Bools([]bool{false, false, true}),
+		},
+	}
+	for testnum, test := range table {
+		a := test.series
+		b := a.Compare(test.comparator, test.comparando)
+		if err := b.Err; err != nil {
+			t.Errorf("Test:%v\nError:%v", testnum, err)
+		}
+		expected, _ := test.expected.Records(false)
+		received, _ := b.Records(false)
+		if !reflect.DeepEqual(expected, received) {
+			t.Errorf(
+				"Test:%v\nExpected:\n%v\nReceived:\n%v",
+				testnum, expected, received,
+			)
+		}
+		if err := checkTypes(b); err != nil {
+			t.Errorf(
+				"Test:%v\nError:%v",
+				testnum, err,
+			)
+		}
+		//if err := checkAddr(a.Addr(), b.Addr()); err != nil {
+		//t.Errorf("Test:%v\nError:%v\nA:%v\nB:%v", testnum, err, a.Addr(), b.Addr())
+		//}
+	}
+}
+
+func TestSeries_Compare_Greater(t *testing.T) {
+	table := []struct {
+		series     Series
+		comparator Comparator
+		comparando interface{}
+		expected   Series
+	}{
+		{
+			Strings([]string{"A", "B", "C", "B", "D", "BADA"}),
 			Greater,
 			"B",
 			Bools([]bool{false, false, true, false, true, true}),
@@ -173,9 +343,33 @@ func TestSeries_Compare(t *testing.T) {
 			Bools([]bool{false, false, false, true, true}),
 		},
 		{
+			Ints([]string{"0", "2", "<nil>", "5", "A"}),
+			Greater,
+			"2",
+			Bools([]bool{false, false, false, true, false}),
+		},
+		{
 			Ints([]int{0, 2, 1, 5, 9}),
 			Greater,
 			[]int{0, 2, 0, 5, 10},
+			Bools([]bool{false, false, true, false, false}),
+		},
+		{
+			Uints([]uint{0, 2, 1, 5, 9}),
+			Greater,
+			"2",
+			Bools([]bool{false, false, false, true, true}),
+		},
+		{
+			Uints([]string{"0", "2", "<nil>", "5", "A"}),
+			Greater,
+			"2",
+			Bools([]bool{false, false, false, true, false}),
+		},
+		{
+			Uints([]uint{0, 2, 1, 5, 9}),
+			Greater,
+			[]uint{0, 2, 0, 5, 10},
 			Bools([]bool{false, false, true, false, false}),
 		},
 		{
@@ -227,6 +421,18 @@ func TestSeries_Compare(t *testing.T) {
 			Bools([]bool{true, true, true, true, false}),
 		},
 		{
+			Uints([]uint{0, 2, 1, 5, 9}),
+			GreaterEq,
+			"2",
+			Bools([]bool{false, true, false, true, true}),
+		},
+		{
+			Uints([]int{0, 2, 1, 5, 9}),
+			GreaterEq,
+			[]uint{0, 2, 0, 5, 10},
+			Bools([]bool{true, true, true, true, false}),
+		},
+		{
 			Floats([]float64{0.1, 2, 1, 5, 9}),
 			GreaterEq,
 			"2",
@@ -250,6 +456,37 @@ func TestSeries_Compare(t *testing.T) {
 			[]bool{true, false, false},
 			Bools([]bool{true, true, true}),
 		},
+	}
+	for testnum, test := range table {
+		a := test.series
+		b := a.Compare(test.comparator, test.comparando)
+		if err := b.Err; err != nil {
+			t.Errorf("Test:%v\nError:%v", testnum, err)
+		}
+		expected, _ := test.expected.Records(false)
+		received, _ := b.Records(false)
+		if !reflect.DeepEqual(expected, received) {
+			t.Errorf(
+				"Test:%v\nExpected:\n%v\nReceived:\n%v",
+				testnum, expected, received,
+			)
+		}
+		if err := checkTypes(b); err != nil {
+			t.Errorf(
+				"Test:%v\nError:%v",
+				testnum, err,
+			)
+		}
+	}
+}
+
+func TestSeries_Compare_Less(t *testing.T) {
+	table := []struct {
+		series     Series
+		comparator Comparator
+		comparando interface{}
+		expected   Series
+	}{
 		{
 			Strings([]string{"A", "B", "C", "B", "D", "BADA"}),
 			Less,
@@ -269,13 +506,43 @@ func TestSeries_Compare(t *testing.T) {
 			Bools([]bool{true, false, true, false, false}),
 		},
 		{
+			Ints([]string{"0", "2", "<nil>", "5", "A"}),
+			Less,
+			"2",
+			Bools([]bool{true, false, false, false, false}),
+		},
+		{
 			Ints([]int{0, 2, 1, 5, 9}),
 			Less,
 			[]int{0, 2, 0, 5, 10},
 			Bools([]bool{false, false, false, false, true}),
 		},
 		{
+			Uints([]uint{0, 2, 1, 5, 9}),
+			Less,
+			"2",
+			Bools([]bool{true, false, true, false, false}),
+		},
+		{
+			Uints([]string{"0", "2", "<nil>", "5", "A"}),
+			Less,
+			"2",
+			Bools([]bool{true, false, false, false, false}),
+		},
+		{
+			Uints([]uint{0, 2, 1, 5, 9}),
+			Less,
+			[]uint{0, 2, 0, 5, 10},
+			Bools([]bool{false, false, false, false, true}),
+		},
+		{
 			Floats([]float64{0.1, 2, 1, 5, 9}),
+			Less,
+			"2",
+			Bools([]bool{true, false, true, false, false}),
+		},
+		{
+			Floats([]string{"0.1", "<nil>", "1", "5", "A"}),
 			Less,
 			"2",
 			Bools([]bool{true, false, true, false, false}),
@@ -297,7 +564,7 @@ func TestSeries_Compare(t *testing.T) {
 			Less,
 			[]bool{true, false, false},
 			Bools([]bool{false, false, false}),
-		},
+		}, // need to add test for <nil>
 		{
 			Strings([]string{"A", "B", "C", "B", "D", "BADA"}),
 			LessEq,
@@ -317,7 +584,25 @@ func TestSeries_Compare(t *testing.T) {
 			Bools([]bool{true, true, true, false, false}),
 		},
 		{
+			Ints([]string{"0", "2", "<nil>", "5", "A"}),
+			LessEq,
+			"2",
+			Bools([]bool{true, true, false, false, false}),
+		},
+		{
 			Ints([]int{0, 2, 1, 5, 9}),
+			LessEq,
+			[]int{0, 2, 0, 5, 10},
+			Bools([]bool{true, true, false, true, true}),
+		},
+		{
+			Uints([]uint{0, 2, 1, 5, 9}),
+			LessEq,
+			"2",
+			Bools([]bool{true, true, true, false, false}),
+		},
+		{
+			Uints([]uint{0, 2, 1, 5, 9}),
 			LessEq,
 			[]int{0, 2, 0, 5, 10},
 			Bools([]bool{true, true, false, true, true}),
@@ -327,6 +612,12 @@ func TestSeries_Compare(t *testing.T) {
 			LessEq,
 			"2",
 			Bools([]bool{true, true, true, false, false}),
+		},
+		{
+			Floats([]string{"0.1", "2", "<nil>", "5", "A"}),
+			LessEq,
+			"2",
+			Bools([]bool{true, true, false, false, false}),
 		},
 		{
 			Floats([]float64{0.1, 2, 1, 5, 9}),
@@ -346,54 +637,6 @@ func TestSeries_Compare(t *testing.T) {
 			[]bool{true, false, false},
 			Bools([]bool{true, false, true}),
 		},
-		{
-			Strings([]string{"A", "B", "C", "B", "D", "BADA"}),
-			In,
-			"B",
-			Bools([]bool{false, true, false, true, false, false}),
-		},
-		{
-			Strings([]string{"Hello", "world", "this", "is", "a", "test"}),
-			In,
-			[]string{"cat", "world", "hello", "a"},
-			Bools([]bool{false, true, false, false, true, false}),
-		},
-		{
-			Ints([]int{0, 2, 1, 5, 9}),
-			In,
-			"2",
-			Bools([]bool{false, true, false, false, false}),
-		},
-		{
-			Ints([]int{0, 2, 1, 5, 9}),
-			In,
-			[]int{2, 99, 1234, 9},
-			Bools([]bool{false, true, false, false, true}),
-		},
-		{
-			Floats([]float64{0.1, 2, 1, 5, 9}),
-			In,
-			"2",
-			Bools([]bool{false, true, false, false, false}),
-		},
-		{
-			Floats([]float64{0.1, 2, 1, 5, 9}),
-			In,
-			[]float64{2, 99, 1234, 9},
-			Bools([]bool{false, true, false, false, true}),
-		},
-		{
-			Bools([]bool{true, true, false}),
-			In,
-			"true",
-			Bools([]bool{true, true, false}),
-		},
-		{
-			Bools([]bool{true, true, false}),
-			In,
-			[]bool{false, false, false},
-			Bools([]bool{false, false, true}),
-		},
 	}
 	for testnum, test := range table {
 		a := test.series
@@ -401,8 +644,8 @@ func TestSeries_Compare(t *testing.T) {
 		if err := b.Err; err != nil {
 			t.Errorf("Test:%v\nError:%v", testnum, err)
 		}
-		expected := test.expected.Records()
-		received := b.Records()
+		expected, _ := test.expected.Records(false)
+		received, _ := b.Records(false)
 		if !reflect.DeepEqual(expected, received) {
 			t.Errorf(
 				"Test:%v\nExpected:\n%v\nReceived:\n%v",
@@ -415,9 +658,6 @@ func TestSeries_Compare(t *testing.T) {
 				testnum, err,
 			)
 		}
-		//if err := checkAddr(a.Addr(), b.Addr()); err != nil {
-		//t.Errorf("Test:%v\nError:%v\nA:%v\nB:%v", testnum, err, a.Addr(), b.Addr())
-		//}
 	}
 }
 
@@ -489,7 +729,8 @@ func TestSeries_Subset(t *testing.T) {
 	}
 }
 
-func TestSeries_Set(t *testing.T) {
+// TODO TestSeries_Set(t *testing.T)
+func TestSeries_Update(t *testing.T) {
 	table := []struct {
 		series   Series
 		indexes  Indexes
@@ -522,7 +763,7 @@ func TestSeries_Set(t *testing.T) {
 		},
 	}
 	for testnum, test := range table {
-		b := test.series.Set(test.indexes, test.values)
+		b := test.series.Update(test.indexes, test.values)
 		if err := b.Err; err != nil {
 			t.Errorf("Test:%v\nError:%v", testnum, err)
 		}
@@ -554,6 +795,14 @@ func TestStrings(t *testing.T) {
 		{
 			Strings([]string{"A", "B", "C", "D"}),
 			"[A B C D]",
+		},
+		{
+			Strings([]string{"A", "B", "C", ""}),
+			"[A B C ]",
+		},
+		{
+			Strings([]string{"COL.3", "COL.1"}),
+			"[COL.3 COL.1]",
 		},
 		{
 			Strings([]string{"A"}),
@@ -617,7 +866,7 @@ func TestStrings(t *testing.T) {
 		},
 		{
 			Strings(nil),
-			"[NaN]",
+			"[]",
 		},
 		{
 			Strings(Strings([]string{"A", "B", "C"})),
@@ -629,7 +878,7 @@ func TestStrings(t *testing.T) {
 			t.Errorf("Test:%v\nError:%v", testnum, err)
 		}
 		expected := test.expected
-		received := fmt.Sprint(test.series)
+		received := fmt.Sprint(test.series.String())
 		if expected != received {
 			t.Errorf(
 				"Test:%v\nExpected:\n%v\nReceived:\n%v",
@@ -650,6 +899,14 @@ func TestInts(t *testing.T) {
 		{
 			Ints([]string{"A", "B", "1", "2"}),
 			"[NaN NaN 1 2]",
+		},
+		{
+			Ints([]string{"A", "", "1", "2"}),
+			"[NaN  1 2]",
+		},
+		{
+			New(Ints([]string{"A", "", "1", "2"}), Int, ""),
+			"[NaN  1 2]",
 		},
 		{
 			Ints([]string{"1"}),
@@ -713,7 +970,7 @@ func TestInts(t *testing.T) {
 		},
 		{
 			Ints(nil),
-			"[NaN]",
+			"[]",
 		},
 		{
 			Ints(Strings([]string{"1", "2", "3"})),
@@ -721,6 +978,114 @@ func TestInts(t *testing.T) {
 		},
 		{
 			Ints(Ints([]string{"1", "2", "3"})),
+			"[1 2 3]",
+		},
+	}
+	for testnum, test := range table {
+		if err := test.series.Err; err != nil {
+			t.Errorf("Test:%v\nError:%v", testnum, err)
+		}
+		expected := test.expected
+		received := fmt.Sprint(test.series)
+		if expected != received {
+			t.Errorf(
+				"Test:%v\nExpected:\n%v\nReceived:\n%v",
+				testnum, expected, received,
+			)
+		}
+		if err := checkTypes(test.series); err != nil {
+			t.Errorf("Test:%v\nError:%v", testnum, err)
+		}
+	}
+}
+
+func TestUints(t *testing.T) {
+	table := []struct {
+		series   Series
+		expected string
+	}{
+		{
+			Uints([]string{"A", "B", "1", "2"}),
+			"[NaN NaN 1 2]",
+		},
+		{
+			Uints([]string{"A", "", "1", "2"}),
+			"[NaN  1 2]",
+		},
+		{
+			New(Uints([]string{"A", "", "1", "2"}), Uint, ""),
+			"[NaN  1 2]",
+		},
+		{
+			Uints([]string{"1"}),
+			"[1]",
+		},
+		{
+			Uints("2"),
+			"[2]",
+		},
+		{
+			Uints([]int{1, 2, 3}),
+			"[1 2 3]",
+		},
+		{
+			Uints([]int{2}),
+			"[2]",
+		},
+		{
+			Uints(-1),
+			"[18446744073709551615]",
+		},
+		{
+			Uints([]float64{1, 2, 3}),
+			"[1 2 3]",
+		},
+		{
+			Uints([]float64{2}),
+			"[2]",
+		},
+		{
+			Uints(-1.0),
+			"[18446744073709551615]",
+		},
+		{
+			Uints(math.NaN()),
+			"[NaN]",
+		},
+		{
+			Uints(math.Inf(1)),
+			"[NaN]",
+		},
+		{
+			Uints(math.Inf(-1)),
+			"[NaN]",
+		},
+		{
+			Uints([]bool{true, true, false}),
+			"[1 1 0]",
+		},
+		{
+			Uints([]bool{false}),
+			"[0]",
+		},
+		{
+			Uints(true),
+			"[1]",
+		},
+		{
+			Uints([]int{}),
+			"[]",
+		},
+		{
+			Uints(nil),
+			"[]",
+		},
+		{
+			Uints(Strings([]string{"1", "2", "3"})),
+			"[1 2 3]",
+		},
+		{
+			Uints(Uints([]string{"1", "2", "3"})),
 			"[1 2 3]",
 		},
 	}
@@ -750,6 +1115,18 @@ func TestFloats(t *testing.T) {
 		{
 			Floats([]string{"A", "B", "1", "2"}),
 			"[NaN NaN 1.000000 2.000000]",
+		},
+		{
+			Floats([]string{"NaN", "", "1", "2"}),
+			"[NaN  1.000000 2.000000]",
+		},
+		{
+			New(Floats([]string{"NaN", "", "1", "2"}), Float, ""),
+			"[NaN  1.000000 2.000000]",
+		},
+		{
+			New(Ints([]string{"NaN", "", "1", "2"}), Float, ""),
+			"[NaN  1.000000 2.000000]",
 		},
 		{
 			Floats([]string{"1"}),
@@ -813,7 +1190,7 @@ func TestFloats(t *testing.T) {
 		},
 		{
 			Floats(nil),
-			"[NaN]",
+			"[]",
 		},
 		{
 			Floats(Strings([]string{"1", "2", "3"})),
@@ -845,7 +1222,7 @@ func TestBools(t *testing.T) {
 	}{
 		{
 			Bools([]string{"A", "true", "1", "f"}),
-			"[NaN true true false]",
+			"[ true true false]",
 		},
 		{
 			Bools([]string{"t"}),
@@ -857,7 +1234,7 @@ func TestBools(t *testing.T) {
 		},
 		{
 			Bools([]int{1, 2, 0}),
-			"[true NaN false]",
+			"[true true false]",
 		},
 		{
 			Bools([]int{1}),
@@ -865,11 +1242,11 @@ func TestBools(t *testing.T) {
 		},
 		{
 			Bools(-1),
-			"[NaN]",
+			"[true]",
 		},
 		{
 			Bools([]float64{1, 2, 0}),
-			"[true NaN false]",
+			"[true true false]",
 		},
 		{
 			Bools([]float64{0}),
@@ -877,19 +1254,19 @@ func TestBools(t *testing.T) {
 		},
 		{
 			Bools(-1.0),
-			"[NaN]",
+			"[true]",
 		},
 		{
 			Bools(math.NaN()),
-			"[NaN]",
+			"[false]",
 		},
 		{
 			Bools(math.Inf(1)),
-			"[NaN]",
+			"[true]",
 		},
 		{
 			Bools(math.Inf(-1)),
-			"[NaN]",
+			"[true]",
 		},
 		{
 			Bools([]bool{true, true, false}),
@@ -909,7 +1286,7 @@ func TestBools(t *testing.T) {
 		},
 		{
 			Bools(nil),
-			"[NaN]",
+			"[]",
 		},
 		{
 			Bools(Strings([]string{"1", "0", "1"})),
@@ -930,6 +1307,69 @@ func TestBools(t *testing.T) {
 		}
 		if err := checkTypes(test.series); err != nil {
 			t.Errorf("Test:%v\nError:%v", testnum, err)
+		}
+	}
+}
+
+// TODO: finish adding tests
+func TestSeries_Factorize(t *testing.T) {
+	table := []struct {
+		series  Series
+		codes   Series
+		unqiues Series
+		sort    bool
+	}{
+		{
+			Strings([]string{"b", "b", "a", "c", "b"}),
+			Ints([]int{0, 0, 1, 2, 0}),
+			Strings([]string{"b", "a", "c"}),
+			false,
+		},
+		{
+			Strings([]string{"b", "b", "a", "c", "b"}),
+			Ints([]int{1, 1, 0, 2, 1}),
+			Strings([]string{"a", "b", "c"}),
+			true,
+		},
+		{
+			Strings([]string{"b", "b", "a", "c", ""}),
+			Ints([]int{0, 0, 1, 2, -1}),
+			Strings([]string{"b", "a", "c"}),
+			false,
+		},
+		{
+			Floats([]float64{3, 1.1, 2, 3}),
+			Ints([]int{0, 1, 2, 0}),
+			Floats([]float64{3, 1.1, 2}),
+			false,
+		},
+		{
+			Floats([]float64{3, 1.1, 2, 3}),
+			Ints([]int{2, 0, 1, 2}),
+			Floats([]float64{1.1, 2, 3}),
+			true,
+		},
+	}
+	for testnum, test := range table {
+		b := test.series
+		bc, bu := b.Factorize(test.sort)
+		if bc.Err != nil {
+			t.Errorf("Test %d: %v\n", testnum, bc.Err)
+			continue
+		}
+		if b.Type() != bu.Type() {
+			t.Errorf("Test %d Mismatched types:\n\tExpected: %v\n\tReceived: %v\n", testnum, b.Type(), bu.Type())
+			continue
+		}
+		expectedCodes, _ := test.codes.Records(false)
+		receivedCodes, _ := bc.Records(false)
+		if !reflect.DeepEqual(expectedCodes, receivedCodes) {
+			t.Errorf("Test %d Codes:\n\tExpected: %v\n\tReceived: %v\n", testnum, expectedCodes, receivedCodes)
+		}
+		expectedUniques, _ := test.unqiues.Records(false)
+		receivedUniques, _ := bu.Records(false)
+		if !reflect.DeepEqual(expectedUniques, receivedUniques) {
+			t.Errorf("Test %d Uniques:\n\tExpected: %v\n\tReceived: %v\n", testnum, expectedUniques, receivedUniques)
 		}
 	}
 }
@@ -973,17 +1413,33 @@ func TestSeries_Records(t *testing.T) {
 			[]string{"1", "2", "3", "NaN", "NaN", "NaN"},
 		},
 		{
+			Ints([]string{"1", "2", "3", "a", "b", ""}),
+			[]string{"1", "2", "3", "NaN", "NaN", ""},
+		},
+		{
+			Uints([]string{"1", "2", "3", "a", "b", "c"}),
+			[]string{"1", "2", "3", "NaN", "NaN", "NaN"},
+		},
+		{
+			Uints([]string{"1", "2", "3", "a", "b", ""}),
+			[]string{"1", "2", "3", "NaN", "NaN", ""},
+		},
+		{
 			Floats([]string{"1", "2", "3", "a", "b", "c"}),
 			[]string{"1.000000", "2.000000", "3.000000", "NaN", "NaN", "NaN"},
 		},
 		{
+			Floats([]string{"1", "2", "3", "a", "b", ""}),
+			[]string{"1.000000", "2.000000", "3.000000", "NaN", "NaN", ""},
+		},
+		{
 			Bools([]string{"1", "0", "1", "t", "f", "c"}),
-			[]string{"true", "false", "true", "true", "false", "NaN"},
+			[]string{"true", "false", "true", "true", "false", ""},
 		},
 	}
 	for testnum, test := range tests {
 		expected := test.expected
-		received := test.series.Records()
+		received, _ := test.series.Records(true) // force convertions
 		if !reflect.DeepEqual(expected, received) {
 			t.Errorf(
 				"Test:%v\nExpected:\n%v\nReceived:\n%v",
@@ -1031,13 +1487,23 @@ func TestSeries_Float(t *testing.T) {
 	}
 	for testnum, test := range tests {
 		expected := test.expected
-		received := test.series.Float()
+		received, _ := test.series.Float(true)
 		if !floatEquals(expected, received) {
 			t.Errorf(
 				"Test:%v\nExpected:\n%v\nReceived:\n%v",
 				testnum, expected, received,
 			)
 		}
+	}
+}
+
+func TestSeries_New(t *testing.T) {
+	//b := Ints([]string{"1", "2", "3"})
+	a := Ints([]string{"a", "4", "c"})
+	na := New(a, a.t, a.Name)
+	received := fmt.Sprint(na)
+	if received != "[NaN 4 NaN]" {
+		t.Errorf("Expected:\n[NaN 4 NaN]\nReceived:\n%v", received)
 	}
 }
 
@@ -1058,6 +1524,11 @@ func TestSeries_Concat(t *testing.T) {
 			[]string{"1", "2", "3", "NaN", "4", "NaN"},
 		},
 		{
+			Uints([]string{"1", "2", "3"}),
+			Uints([]string{"a", "4", "c"}),
+			[]string{"1", "2", "3", "NaN", "4", "NaN"},
+		},
+		{
 			Floats([]string{"1", "2", "3"}),
 			Floats([]string{"a", "4", "c"}),
 			[]string{"1.000000", "2.000000", "3.000000", "NaN", "4.000000", "NaN"},
@@ -1073,7 +1544,7 @@ func TestSeries_Concat(t *testing.T) {
 		if err := ab.Err; err != nil {
 			t.Errorf("Test:%v\nError:%v", testnum, err)
 		}
-		received := ab.Records()
+		received, _ := ab.Records(false)
 		expected := test.expected
 		if !reflect.DeepEqual(expected, received) {
 			t.Errorf(
@@ -1101,7 +1572,22 @@ func TestSeries_Order(t *testing.T) {
 		expected []int
 	}{
 		{
-			Ints([]string{"2", "1", "3", "NaN", "4", "NaN"}),
+			Ints([]string{"2", "1", "3", "NaN", "4", ""}),
+			false,
+			[]int{1, 0, 2, 4, 3, 5}, // 1,2,3,4,NaN,<nil>
+		},
+		{
+			Ints([]string{"2", "1", "3", "", "4", "NaN"}),
+			false,
+			[]int{1, 0, 2, 4, 3, 5},
+		},
+		{
+			Uints([]string{"2", "1", "3", "NaN", "4", ""}),
+			false,
+			[]int{1, 0, 2, 4, 3, 5},
+		},
+		{
+			Uints([]string{"2", "1", "3", "", "4", "NaN"}),
 			false,
 			[]int{1, 0, 2, 4, 3, 5},
 		},
@@ -1111,9 +1597,9 @@ func TestSeries_Order(t *testing.T) {
 			[]int{1, 0, 2, 4, 3, 5},
 		},
 		{
-			Strings([]string{"c", "b", "a"}),
+			Strings([]string{"b", "a", "c"}),
 			false,
-			[]int{2, 1, 0},
+			[]int{1, 0, 2},
 		},
 		{
 			Bools([]bool{true, false, false, false, true}),
@@ -1121,7 +1607,7 @@ func TestSeries_Order(t *testing.T) {
 			[]int{1, 2, 3, 0, 4},
 		},
 		{
-			Ints([]string{"2", "1", "3", "NaN", "4", "NaN"}),
+			Ints([]string{"2", "1", "3", "NaN", "4", ""}),
 			true,
 			[]int{4, 2, 0, 1, 3, 5},
 		},
@@ -1131,9 +1617,9 @@ func TestSeries_Order(t *testing.T) {
 			[]int{4, 2, 0, 1, 3, 5},
 		},
 		{
-			Strings([]string{"c", "b", "a"}),
+			Strings([]string{"b", "c", "a"}),
 			true,
-			[]int{0, 1, 2},
+			[]int{1, 0, 2},
 		},
 		{
 			Bools([]bool{true, false, false, false, true}),
@@ -1163,12 +1649,70 @@ func TestSeries_IsNaN(t *testing.T) {
 			[]bool{false, false, false, true, false, true},
 		},
 		{
+			Uints([]string{"2", "1", "3", "NaN", "4", "NaN"}),
+			[]bool{false, false, false, true, false, true},
+		},
+		{
 			Floats([]string{"A", "1", "B", "3"}),
 			[]bool{true, false, true, false},
+		},
+		{
+			Floats([]string{"A", "1", "", "3"}),
+			[]bool{true, false, true, false},
+		},
+		{
+			Bools([]string{"1", "0", "A"}),
+			[]bool{false, false, true},
+		},
+		{
+			Bools([]string{"1", "0", ""}),
+			[]bool{false, false, true},
 		},
 	}
 	for testnum, test := range tests {
 		received := test.series.IsNaN()
+		expected := test.expected
+		if !reflect.DeepEqual(expected, received) {
+			t.Errorf(
+				"Test:%v\nExpected:\n%v\nReceived:\n%v",
+				testnum, expected, received,
+			)
+		}
+	}
+}
+
+func TestSeries_IsValid(t *testing.T) {
+	tests := []struct {
+		series   Series
+		expected []bool
+	}{
+		{
+			Ints([]string{"2", "1", "3", "", "4", "A"}),
+			[]bool{true, true, true, false, true, true},
+		},
+		{
+			Uints([]string{"2", "1", "3", "", "4", ""}),
+			[]bool{true, true, true, false, true, false},
+		},
+		{
+			Floats([]string{"", "1", "A", "3"}),
+			[]bool{false, true, true, true},
+		},
+		{
+			Strings([]string{"", "1", "A", "3"}),
+			[]bool{false, true, true, true},
+		},
+		{
+			Bools([]string{"1", "0", "A"}),
+			[]bool{true, true, false},
+		},
+		{
+			Bools([]string{"1", "0", ""}),
+			[]bool{true, true, false},
+		},
+	}
+	for testnum, test := range tests {
+		received := test.series.IsValid()
 		expected := test.expected
 		if !reflect.DeepEqual(expected, received) {
 			t.Errorf(
@@ -1207,7 +1751,10 @@ func TestSeries_StdDev(t *testing.T) {
 	}
 
 	for testnum, test := range tests {
-		received := test.series.StdDev()
+		received, err := test.series.StdDev()
+		if err != nil {
+			t.Errorf("Test:%v\nError:%v", testnum, err)
+		}
 		expected := test.expected
 		if !compareFloats(received, expected, 6) {
 			t.Errorf(
@@ -1246,7 +1793,10 @@ func TestSeries_Mean(t *testing.T) {
 	}
 
 	for testnum, test := range tests {
-		received := test.series.Mean()
+		received, err := test.series.Mean()
+		if err != nil {
+			t.Errorf("Test:%v\nError:%v", testnum, err)
+		}
 		expected := test.expected
 		if !compareFloats(received, expected, 6) {
 			t.Errorf(
@@ -1285,7 +1835,10 @@ func TestSeries_Max(t *testing.T) {
 	}
 
 	for testnum, test := range tests {
-		received := test.series.Max()
+		received, err := test.series.Max()
+		if err != nil {
+			t.Errorf("Test:%v\nError:%v", testnum, err)
+		}
 		expected := test.expected
 		if !compareFloats(received, expected, 6) {
 			t.Errorf(
@@ -1339,7 +1892,10 @@ func TestSeries_Median(t *testing.T) {
 	}
 
 	for testnum, test := range tests {
-		received := test.series.Median()
+		received, err := test.series.Median()
+		if err != nil {
+			t.Errorf("Test:%v\nError:%v", testnum, err)
+		}
 		expected := test.expected
 		if !compareFloats(received, expected, 6) {
 			t.Errorf(
@@ -1378,7 +1934,10 @@ func TestSeries_Min(t *testing.T) {
 	}
 
 	for testnum, test := range tests {
-		received := test.series.Min()
+		received, err := test.series.Min()
+		if err != nil {
+			t.Errorf("Test:%v\nError:%v", testnum, err)
+		}
 		expected := test.expected
 		if !compareFloats(received, expected, 6) {
 			t.Errorf(
@@ -1421,7 +1980,10 @@ func TestSeries_MaxStr(t *testing.T) {
 	}
 
 	for testnum, test := range tests {
-		received := test.series.MaxStr()
+		received, err := test.series.MaxStr()
+		if err != nil {
+			t.Errorf("Test:%v\nError:%v", testnum, err)
+		}
 		expected := test.expected
 		if received != expected {
 			t.Errorf(
@@ -1464,7 +2026,10 @@ func TestSeries_MinStr(t *testing.T) {
 	}
 
 	for testnum, test := range tests {
-		received := test.series.MinStr()
+		received, err := test.series.MinStr()
+		if err != nil {
+			t.Errorf("Test:%v\nError:%v", testnum, err)
+		}
 		expected := test.expected
 		if received != expected {
 			t.Errorf(
@@ -1514,7 +2079,10 @@ func TestSeries_Quantile(t *testing.T) {
 	}
 
 	for testnum, test := range tests {
-		received := test.series.Quantile(test.p)
+		received, err := test.series.Quantile(test.p)
+		if err != nil {
+			t.Errorf("Test:%v\nError:%v", testnum, err)
+		}
 		expected := test.expected
 		if !compareFloats(received, expected, 6) {
 			t.Errorf(
@@ -1525,9 +2093,8 @@ func TestSeries_Quantile(t *testing.T) {
 	}
 }
 
-
 func TestSeries_Map(t *testing.T) {
-		tests := []struct {
+	tests := []struct {
 		series   Series
 		expected Series
 	}{
@@ -1564,11 +2131,16 @@ func TestSeries_Map(t *testing.T) {
 	doubleFloat64 := func(e Element) Element {
 		var result Element
 		result = e.Copy()
-		result.Set(result.Float() * 2)		
+		f, err := result.Float()
+		if err != nil {
+			t.Errorf("%v", err)
+			return Element(nil)
+		}
+		result.Set(f * 2)
 		return Element(result)
 	}
 
-	// and two booleans 
+	// and two booleans
 	and := func(e Element) Element {
 		var result Element
 		result = e.Copy()
@@ -1587,12 +2159,12 @@ func TestSeries_Map(t *testing.T) {
 		result = e.Copy()
 		i, err := result.Int()
 		if err != nil {
-			return Element(&intElement{
-				e: +5,
-				nan: false,
+			return Element(&IntElement{
+				e:     +5,
+				valid: true,
 			})
 		}
-		result.Set(i + 5)		
+		result.Set(i + 5)
 		return Element(result)
 	}
 
@@ -1600,16 +2172,21 @@ func TestSeries_Map(t *testing.T) {
 	trimXyZPrefix := func(e Element) Element {
 		var result Element
 		result = e.Copy()
-		result.Set(strings.TrimPrefix(result.String(), "XyZ"))
+		s, err := result.String()
+		if err != nil {
+			t.Errorf("%v", err)
+			return Element(nil)
+		}
+		result.Set(strings.TrimPrefix(s, "XyZ"))
 		return Element(result)
 	}
 
-		for testnum, test := range tests {
+	for testnum, test := range tests {
 		switch test.series.Type() {
 		case Bool:
 			expected := test.expected
 			received := test.series.Map(and)
-			for i := 0 ; i<expected.Len() ; i++ {
+			for i := 0; i < expected.Len(); i++ {
 				e, _ := expected.Elem(i).Bool()
 				r, _ := received.Elem(i).Bool()
 
@@ -1620,13 +2197,14 @@ func TestSeries_Map(t *testing.T) {
 					)
 				}
 			}
-			
+
 		case Float:
 			expected := test.expected
 			received := test.series.Map(doubleFloat64)
-			for i := 0 ; i<expected.Len() ; i++ {
-				if !compareFloats(expected.Elem(i).Float(),
-				received.Elem(i).Float(), 6) {
+			for i := 0; i < expected.Len(); i++ {
+				e, _ := expected.Elem(i).Float()
+				r, _ := received.Elem(i).Float()
+				if !compareFloats(e, r, 6) {
 					t.Errorf(
 						"Test:%v\nExpected:\n%v\nReceived:\n%v",
 						testnum, expected, received,
@@ -1636,7 +2214,7 @@ func TestSeries_Map(t *testing.T) {
 		case Int:
 			expected := test.expected
 			received := test.series.Map(add5Int)
-			for i := 0 ; i<expected.Len() ; i++ {
+			for i := 0; i < expected.Len(); i++ {
 				e, _ := expected.Elem(i).Int()
 				r, _ := received.Elem(i).Int()
 				if e != r {
@@ -1649,9 +2227,10 @@ func TestSeries_Map(t *testing.T) {
 		case String:
 			expected := test.expected
 			received := test.series.Map(trimXyZPrefix)
-			for i :=0 ; i<expected.Len() ; i++ {
-				if strings.Compare(expected.Elem(i).String(),
-				received.Elem(i).String()) != 0 {
+			for i := 0; i < expected.Len(); i++ {
+				e, _ := expected.Elem(i).String()
+				r, _ := received.Elem(i).String()
+				if strings.Compare(e, r) != 0 {
 					t.Errorf(
 						"Test:%v\nExpected:\n%v\nReceived:\n%v",
 						testnum, expected, received,
