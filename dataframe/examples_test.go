@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-gota/gota/dataframe"
-	"github.com/go-gota/gota/series"
+	"github.com/Paradigm4/gota/dataframe"
+	"github.com/Paradigm4/gota/series"
 )
 
 func ExampleNew() {
@@ -169,22 +169,22 @@ func ExampleDataFrame_Filter() {
 	fmt.Println(fil2)
 }
 
-func ExampleDataFrame_Mutate() {
+func ExampleDataFrame_Update() {
 	df := dataframe.LoadRecords(
 		[][]string{
-			[]string{"A", "B", "C", "D"},
-			[]string{"a", "4", "5.1", "true"},
-			[]string{"k", "5", "7.0", "true"},
-			[]string{"k", "4", "6.0", "true"},
-			[]string{"a", "2", "7.1", "false"},
+			{"A", "B", "C", "D"},
+			{"a", "4", "5.1", "true"},
+			{"k", "5", "7.0", "true"},
+			{"k", "4", "6.0", "true"},
+			{"a", "2", "7.1", "false"},
 		},
 	)
 	// Change column C with a new one
-	mut := df.Mutate(
+	mut := df.Update(
 		series.New([]string{"a", "b", "c", "d"}, series.String, "C"),
 	)
 	// Add a new column E
-	mut2 := df.Mutate(
+	mut2 := df.Update(
 		series.New([]string{"a", "b", "c", "d"}, series.String, "E"),
 	)
 	fmt.Println(mut)

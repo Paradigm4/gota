@@ -8,21 +8,32 @@ import (
 )
 
 type stringElement struct {
-	e   string
-	nan bool
+	e     string
+	valid bool
 }
 
-func (e *stringElement) Set(value interface{}) {
-	e.nan = false
+// Strings with NaN will be treated as just strings with NaN
+func (e *stringElement) Set(value interface{}) error {
+	e.valid = true
+	if value == nil {
+		e.valid = false
+		return nil
+	}
 	switch value.(type) {
 	case string:
-		e.e = string(value.(string))
-		if e.e == "NaN" {
-			e.nan = true
-			return
+		if value.(string) == Nil {
+			e.valid = false
+		} else {
+			e.e = string(value.(string))
 		}
 	case int:
 		e.e = strconv.Itoa(value.(int))
+	case int64:
+		e.e = strconv.FormatInt(value.(int64), 10)
+	case uint64:
+		e.e = strconv.FormatUint(value.(uint64), 10)
+	case float32:
+		e.e = strconv.FormatFloat(float64(value.(float32)), 'f', 6, 64)
 	case float64:
 		e.e = strconv.FormatFloat(value.(float64), 'f', 6, 64)
 	case bool:
@@ -32,25 +43,56 @@ func (e *stringElement) Set(value interface{}) {
 		} else {
 			e.e = "false"
 		}
+	case NaNElement:
+		e.e = "NaN"
 	case Element:
-		e.e = value.(Element).String()
+		if value.(Element).IsValid() {
+			v, err := value.(Element).String()
+			if err != nil {
+				e.valid = false
+				return err
+			}
+			e.e = v
+		} else {
+			e.valid = false
+			return nil
+		}
 	default:
-		e.nan = true
-		return
+		e.valid = false
+		return fmt.Errorf("Unsupported type '%T' conversion to a string", value)
 	}
-	return
+	return nil
 }
 
 func (e stringElement) Copy() Element {
-	if e.IsNA() {
-		return &stringElement{"", true}
-	}
-	return &stringElement{e.e, false}
+	return &stringElement{e.e, e.valid}
 }
 
-func (e stringElement) IsNA() bool {
-	if e.nan {
+// Returns true if the string is parsed as NaN, missing, or fails to be parsed as a float
+func (e stringElement) IsNaN() bool {
+	if !e.valid {
 		return true
+	}
+	f, err := strconv.ParseFloat(e.e, 64)
+	if err == nil {
+		return math.IsNaN(f)
+	}
+	return true
+}
+
+func (e stringElement) IsValid() bool {
+	return e.valid
+}
+
+// Returns true if the string is parsed as Inf, -Inf or +Inf.
+func (e stringElement) IsInf(sign int) bool {
+	switch strings.ToLower(e.e) {
+	case "inf", "-inf", "+inf":
+		f, err := strconv.ParseFloat(e.e, 64)
+		if err != nil {
+			return false
+		}
+		return math.IsInf(f, sign)
 	}
 	return false
 }
@@ -60,40 +102,47 @@ func (e stringElement) Type() Type {
 }
 
 func (e stringElement) Val() ElementValue {
-	if e.IsNA() {
+	if !e.IsValid() {
 		return nil
 	}
 	return string(e.e)
 }
 
-func (e stringElement) String() string {
-	if e.IsNA() {
-		return "NaN"
+func (e stringElement) String() (string, error) {
+	if !e.IsValid() {
+		return "", fmt.Errorf("can't convert nil to string")
 	}
-	return string(e.e)
+	return string(e.e), nil
 }
 
-func (e stringElement) Int() (int, error) {
-	if e.IsNA() {
-		return 0, fmt.Errorf("can't convert NaN to int")
+func (e stringElement) Int() (int64, error) {
+	if !e.IsValid() {
+		return 0, fmt.Errorf("can't convert nil to int64")
 	}
-	return strconv.Atoi(e.e)
+	return strconv.ParseInt(e.e, 10, 64)
 }
 
-func (e stringElement) Float() float64 {
-	if e.IsNA() {
-		return math.NaN()
+func (e stringElement) Uint() (uint64, error) {
+	if !e.IsValid() {
+		return 0, fmt.Errorf("can't convert nil to uint64")
+	}
+	return strconv.ParseUint(e.e, 10, 64)
+}
+
+func (e stringElement) Float() (float64, error) {
+	if !e.IsValid() {
+		return math.NaN(), fmt.Errorf("can't convert nil to float64")
 	}
 	f, err := strconv.ParseFloat(e.e, 64)
 	if err != nil {
-		return math.NaN()
+		return math.NaN(), nil
 	}
-	return f
+	return f, nil
 }
 
 func (e stringElement) Bool() (bool, error) {
-	if e.IsNA() {
-		return false, fmt.Errorf("can't convert NaN to bool")
+	if !e.IsValid() {
+		return false, fmt.Errorf("can't convert nil to bool")
 	}
 	switch strings.ToLower(e.e) {
 	case "true", "t", "1":
@@ -101,47 +150,73 @@ func (e stringElement) Bool() (bool, error) {
 	case "false", "f", "0":
 		return false, nil
 	}
-	return false, fmt.Errorf("can't convert String \"%v\" to bool", e.e)
+	return false, fmt.Errorf("can't convert String '%v' to bool", e.e)
 }
 
 func (e stringElement) Eq(elem Element) bool {
-	if e.IsNA() || elem.IsNA() {
+	if e.valid != elem.IsValid() {
+		// xor
 		return false
 	}
-	return e.e == elem.String()
+	if !e.valid && !elem.IsValid() {
+		// nil == nil is true
+		return true
+	}
+	s, err := elem.String()
+	if err != nil {
+		return false
+	}
+	return e.e == s
 }
 
 func (e stringElement) Neq(elem Element) bool {
-	if e.IsNA() || elem.IsNA() {
-		return false
-	}
-	return e.e != elem.String()
+	return !e.Eq(elem)
 }
 
 func (e stringElement) Less(elem Element) bool {
-	if e.IsNA() || elem.IsNA() {
+	if !e.valid || !elem.IsValid() {
+		// really should be an error
 		return false
 	}
-	return e.e < elem.String()
+	s, err := elem.String()
+	if err != nil {
+		return false
+	}
+	return e.e < s
 }
 
 func (e stringElement) LessEq(elem Element) bool {
-	if e.IsNA() || elem.IsNA() {
+	if !e.valid || !elem.IsValid() {
+		// really should be an error
 		return false
 	}
-	return e.e <= elem.String()
+	s, err := elem.String()
+	if err != nil {
+		return false
+	}
+	return e.e <= s
 }
 
 func (e stringElement) Greater(elem Element) bool {
-	if e.IsNA() || elem.IsNA() {
+	if !e.valid || !elem.IsValid() {
+		// really should be an error
 		return false
 	}
-	return e.e > elem.String()
+	s, err := elem.String()
+	if err != nil {
+		return false
+	}
+	return e.e > s
 }
 
 func (e stringElement) GreaterEq(elem Element) bool {
-	if e.IsNA() || elem.IsNA() {
+	if !e.valid || !elem.IsValid() {
+		// really should be an error
 		return false
 	}
-	return e.e >= elem.String()
+	s, err := elem.String()
+	if err != nil {
+		return false
+	}
+	return e.e >= s
 }

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/go-gota/gota/series"
+	"github.com/Paradigm4/gota/series"
 )
 
 func generateInts(n int) (data []int) {
@@ -251,7 +251,7 @@ func BenchmarkSeries_Set(b *testing.B) {
 		s := test.series.Copy()
 		b.Run(test.name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				s.Set(test.indexes, test.newValues)
+				s.Update(test.indexes, test.newValues)
 			}
 		})
 	}
