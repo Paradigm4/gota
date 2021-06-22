@@ -188,7 +188,7 @@ func arrayColumnToSeries(column *array.Column) (series.Series, error) {
 			}
 		}
 	default:
-		return series.Series{}, fmt.Errorf("Unsupported Arrow Type: %v", column.DataType())
+		return series.Series{}, fmt.Errorf("unsupported Arrow Type: %v", column.DataType())
 	}
 	return s, nil
 }
