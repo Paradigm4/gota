@@ -175,8 +175,11 @@ func (e IntElement) Float() (float64, error) {
 }
 
 func (e IntElement) Bool() (bool, error) {
-	if !e.valid || e.nan {
-		return false, fmt.Errorf("can't convert nil/nan to bool")
+	if !e.valid {
+		return false, fmt.Errorf("can't convert nil to Bool")
+	}
+	if e.IsNaN() {
+		return true, nil // not zero so true
 	}
 	if e.e == 0 {
 		return false, nil

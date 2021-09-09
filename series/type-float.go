@@ -148,16 +148,16 @@ func (e floatElement) Float() (float64, error) {
 }
 
 func (e floatElement) Bool() (bool, error) {
-	if !e.IsValid() {
-		return false, fmt.Errorf("can't convert nil to bool")
+	if !e.valid {
+		return false, fmt.Errorf("can't convert nil to Bool")
 	}
-	switch e.e {
-	case 1:
-		return true, nil
-	case 0:
+	if e.IsNaN() {
+		return true, nil // not zero so true
+	}
+	if e.e == 0 {
 		return false, nil
 	}
-	return false, fmt.Errorf("can't convert Float '%v' to bool", e.e)
+	return true, nil
 }
 
 func (e floatElement) Eq(elem Element) bool {

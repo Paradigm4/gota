@@ -836,6 +836,36 @@ func (s Series) Records(force bool) ([]string, error) {
 	return ret, nil
 }
 
+// Any returns whether any valid element is True
+// Returns False unless there is at least one element within the series that is True or equivalent (e.g. non-zero or non-empty)
+// This uses the element's Bool when not NA or Invalid
+// If skipnan is false, then NaNs are treated as true; If skipnan is true and if the whole series is NaN, the result will be false
+func (s Series) Any(skipnan bool) (bool, error) {
+	rs := false
+	for i := 0; i < s.Len(); i++ {
+		e := s.elements.Elem(i)
+		if !e.IsValid() {
+			continue
+		}
+		if !skipnan && e.IsNaN() {
+			rs = true
+			break
+		} else if skipnan && e.IsNaN() {
+			continue
+		} else {
+			v, e := e.Bool()
+			if e != nil {
+				return rs, e
+			}
+			if v {
+				rs = true
+				break
+			}
+		}
+	}
+	return rs, nil
+}
+
 // Float returns the elements of a Series as a []float64.
 // If foce is true and an element can not be converted to float64, an NaN will be inserted (promoted). Otherwise an error will be generated.
 func (s Series) Float(force bool) ([]float64, error) {

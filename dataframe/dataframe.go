@@ -1399,6 +1399,94 @@ func (df DataFrame) Val(idx int, colname string) series.Element {
 	return df.columns[cidx].Elem(idx)
 }
 
+// Duplicated returns boolean Series denoting duplicate rows.
+//
+// subset: column label or sequence of labels:
+//    Only consider certain columns for identifying duplicates, empty series default uses all of the columns
+// keep{‘first’, ‘last’, 'any'}: Determines which duplicates (if any) to mark.
+//    first : Mark duplicates as true except for the first occurrence.
+//    last : Mark duplicates as true except for the last occurrence.
+//    any : Mark all duplicates as true.
+func (df DataFrame) Duplicated(subset SelectIndexes, keep string) series.Series {
+	s := series.New([]bool{}, series.Bool, "duplicated", df.nrows)
+	if df.Err != nil {
+		s.Err = df.Err
+		return s
+	}
+
+	idx, err := parseSelectIndexes(df.ncols, subset, df.Names())
+	if err != nil {
+		s.Err = fmt.Errorf("can't select columns: %v", err)
+		return s
+	}
+	if len(idx) == 0 {
+		idx = make([]int, df.ncols)
+		for i := 0; i < df.ncols; i++ {
+			idx[i] = i
+		}
+	}
+	if findInStringSlice(strings.ToLower(keep), []string{"first", "last", "any"}) == -1 {
+		s.Err = fmt.Errorf("unknown keep: %v", keep)
+		return s
+	}
+
+	// initialize results as all false
+	for i := 0; i < df.nrows; i++ {
+		s.Elem(i).Set(false)
+	}
+	if s.Err != nil {
+		return s
+	}
+
+	// concatenate factors from each column
+	// speed vs less memory; going with less memory
+	fc := make([]strings.Builder, df.nrows)
+	for _, c := range idx {
+		if c < 0 || c >= df.ncols {
+			s.Err = fmt.Errorf("column index, %v, out of range: 0 to %v", c, df.ncols)
+			return s
+		}
+		f, _ := df.columns[c].Factorize(false)
+		for i := 0; i < df.nrows; i++ {
+			v, _ := f.Elem(i).String()
+			fc[i].WriteString(v)
+		}
+	}
+	fm := make(map[string][]int)
+	for i := 0; i < df.ncols; i++ {
+		v := fc[i].String()
+		if f, ok := fm[v]; ok {
+			fm[v] = append(f, i)
+		} else {
+			fm[v] = []int{i}
+		}
+	}
+	// clean up (gc)?
+
+	for _, v := range fm {
+		if len(v) > 1 {
+			switch keep {
+			case "first":
+				// Mark duplicates as true except for the first occurrence.
+				for i := 1; i < len(v); i++ {
+					s.Set(v[i], true)
+				}
+			case "last":
+				// Mark duplicates as true except for the last occurrence.
+				for i := 0; i < len(v)-1; i++ {
+					s.Set(v[i], true)
+				}
+			default:
+				// any: Mark all duplicates as true.
+				for i := 0; i < len(v); i++ {
+					s.Set(v[i], true)
+				}
+			}
+		}
+	}
+	return s
+}
+
 // InnerJoin returns a DataFrame containing the inner join of two DataFrames.
 func (df DataFrame) InnerJoin(b DataFrame, keys ...string) DataFrame {
 	if len(keys) == 0 {

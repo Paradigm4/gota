@@ -1449,6 +1449,108 @@ func TestSeries_Records(t *testing.T) {
 	}
 }
 
+func TestSeries_Any(t *testing.T) {
+	tests := []struct {
+		series   Series
+		skipnan  bool
+		expected bool
+	}{
+		{
+			Bools([]string{"0", "f", "F"}),
+			false,
+			false,
+		},
+		{
+			Bools([]string{"1", "f", "F"}),
+			false,
+			true,
+		},
+		{
+			Bools([]string{"", "b", "c"}),
+			false,
+			false,
+		},
+		{
+			Bools([]string{"", "b", "c"}), // inValids
+			true,
+			false,
+		},
+		{
+			Floats([]string{"0", "0", "0"}),
+			false,
+			false,
+		},
+		// test 5
+		{
+			Floats([]string{"0", "0", "1"}),
+			false,
+			true,
+		},
+		{
+			Floats([]string{"0", "0", "a"}), // a => NaN
+			false,
+			true,
+		},
+		{
+			Floats([]string{"0", "0", "a"}),
+			true,
+			false,
+		},
+		{
+			Floats([]string{"0", "0", ""}), // "" => Not Valid (false)
+			true,
+			false,
+		},
+		{
+			Ints([]string{"0", "0", "0"}),
+			false,
+			false,
+		},
+		// test 10
+		{
+			Ints([]string{"0", "0", "1"}),
+			false,
+			true,
+		},
+		{
+			Ints([]string{"0", "0", "b"}), // b => NaN
+			false,
+			true,
+		},
+		{
+			Ints([]string{"0", "0", "b"}),
+			true,
+			false,
+		},
+		{
+			Ints([]string{"0", "0", ""}),
+			false,
+			false,
+		},
+		{
+			Ints([]string{"", "0", "1"}),
+			false,
+			true,
+		},
+	}
+	for testnum, test := range tests {
+		s := test.series
+		if s.Err != nil {
+			t.Errorf("Test %d: %v\n", testnum, s.Err)
+			continue
+		}
+		received, err := s.Any(test.skipnan)
+		if err != nil {
+			t.Errorf("Test %d: %v\n", testnum, err)
+			continue
+		}
+		if test.expected != received {
+			t.Errorf("Test:%v\nExpected:\n%v\nReceived:\n%v",
+				testnum, test.expected, received)
+		}
+	}
+}
+
 func TestSeries_Float(t *testing.T) {
 	precision := 0.0000001
 	floatEquals := func(x, y []float64) bool {

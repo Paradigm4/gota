@@ -1402,6 +1402,91 @@ func TestDataFrame_SetNames(t *testing.T) {
 	}
 }
 
+func TestDataFrame_Duplicated(t *testing.T) {
+	table := []struct {
+		subset []int
+		keep   string
+		df     DataFrame
+		expS   series.Series
+	}{
+		{
+			[]int{},
+			"any",
+			New(
+				series.New([]string{"a", "b", "c"}, series.String, "COL.1"),
+				series.New([]int{1, 3, 5}, series.Int, "COL.2"),
+				series.New([]float64{3.0, 3.1, 3.2}, series.Float, "COL.3"),
+			),
+			series.New([]bool{false, false, false}, series.Bool, "expDuplicated"),
+		},
+		{
+			[]int{},
+			"any",
+			New(
+				series.New([]string{"a", "b", "b"}, series.String, "COL.1"),
+				series.New([]int{1, 3, 3}, series.Int, "COL.2"),
+				series.New([]float64{3.0, 3.1, 3.1}, series.Float, "COL.3"),
+			),
+			series.New([]bool{false, true, true}, series.Bool, "expDuplicated"),
+		},
+		{
+			[]int{},
+			"first",
+			New(
+				series.New([]string{"a", "b", "b"}, series.String, "COL.1"),
+				series.New([]int{1, 3, 3}, series.Int, "COL.2"),
+				series.New([]float64{3.0, 3.1, 3.1}, series.Float, "COL.3"),
+			),
+			series.New([]bool{false, false, true}, series.Bool, "expDuplicated"),
+		},
+		{
+			[]int{},
+			"last",
+			New(
+				series.New([]string{"a", "b", "b"}, series.String, "COL.1"),
+				series.New([]int{1, 3, 3}, series.Int, "COL.2"),
+				series.New([]float64{3.0, 3.1, 3.1}, series.Float, "COL.3"),
+			),
+			series.New([]bool{false, true, false}, series.Bool, "expDuplicated"),
+		},
+		{
+			[]int{0, 1},
+			"any",
+			New(
+				series.New([]string{"a", "b", "b"}, series.String, "COL.1"),
+				series.New([]int{1, 3, 5}, series.Int, "COL.2"),
+				series.New([]float64{3.0, 3.1, 3.1}, series.Float, "COL.3"),
+			),
+			series.New([]bool{false, false, false}, series.Bool, "expDuplicated"),
+		},
+		{
+			[]int{0, 2},
+			"any",
+			New(
+				series.New([]string{"a", "b", "b"}, series.String, "COL.1"),
+				series.New([]int{1, 3, 5}, series.Int, "COL.2"),
+				series.New([]float64{3.0, 3.1, 3.1}, series.Float, "COL.3"),
+			),
+			series.New([]bool{false, true, true}, series.Bool, "expDuplicated"),
+		},
+	}
+
+	for i, ta := range table {
+		b := ta.df.Duplicated(ta.subset, ta.keep)
+		if b.Err != nil {
+			t.Errorf("Test: %d\nError:%v", i, b.Err)
+			continue
+		}
+
+		// Check that the values are the same between both DataFrames
+		tar, _ := ta.expS.Records(true)
+		br, _ := b.Records(true)
+		if !reflect.DeepEqual(tar, br) {
+			t.Errorf("Test: %d\nDifferent values:\nExpected:%v\nReceived:%v", i, tar, br)
+		}
+	}
+}
+
 func TestDataFrame_InnerJoin(t *testing.T) {
 	a := LoadRecords(
 		[][]string{

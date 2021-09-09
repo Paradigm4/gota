@@ -141,8 +141,8 @@ func (e stringElement) Float() (float64, error) {
 }
 
 func (e stringElement) Bool() (bool, error) {
-	if !e.IsValid() {
-		return false, fmt.Errorf("can't convert nil to bool")
+	if !e.valid {
+		return false, fmt.Errorf("can't convert nil to Bool")
 	}
 	switch strings.ToLower(e.e) {
 	case "true", "t", "1":
