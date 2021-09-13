@@ -104,14 +104,18 @@ type Comparator string
 
 // Supported Comparators
 const (
-	Eq        Comparator = "==" // Equal
-	Neq       Comparator = "!=" // Non equal
-	Greater   Comparator = ">"  // Greater than
-	GreaterEq Comparator = ">=" // Greater or equal than
-	Less      Comparator = "<"  // Lesser than
-	LessEq    Comparator = "<=" // Lesser or equal than
-	In        Comparator = "in" // Inside
+	Eq        Comparator = "=="   // Equal
+	Neq       Comparator = "!="   // Non equal
+	Greater   Comparator = ">"    // Greater than
+	GreaterEq Comparator = ">="   // Greater or equal than
+	Less      Comparator = "<"    // Lesser than
+	LessEq    Comparator = "<="   // Lesser or equal than
+	In        Comparator = "in"   // Inside
+	CompFunc  Comparator = "func" // user-defined comparison function
 )
+
+// compFunc defines a user-defined comparator function. Used internally for type assertions
+type compFunc = func(el Element) bool
 
 // Type is a convenience alias that can be used for a more type safe way of
 // reason and use Series types.
@@ -724,9 +728,25 @@ func (s Series) Compare(comparator Comparator, comparando interface{}) Series {
 		return ret, nil
 	}
 
-	comp := New(comparando, s.t, "")
 	bools := make([]bool, s.Len())
-	// In comparator comparation
+
+	// CompFunc comparator comparison
+	if comparator == CompFunc {
+		f, ok := comparando.(compFunc)
+		if !ok {
+			panic("comparando is not a comparison function of type func(el Element) bool")
+		}
+
+		for i := 0; i < s.Len(); i++ {
+			e := s.elements.Elem(i)
+			bools[i] = f(e)
+		}
+
+		return Bools(bools)
+	}
+
+	comp := New(comparando, s.t, "")
+	// In comparator comparison
 	if comparator == In {
 		for i := 0; i < s.Len(); i++ {
 			e := s.elements.Elem(i)
@@ -1268,11 +1288,28 @@ func (s Series) Quantile(p float64) (float64, error) {
 // the function passed in via argument `f` will not expect another type, but
 // instead expects to handle Element(s) of type Float.
 func (s Series) Map(f MapFunction) Series {
-
 	mappedValues := make([]Element, s.Len())
 	for i := 0; i < s.Len(); i++ {
 		value := f(s.elements.Elem(i))
 		mappedValues[i] = value
 	}
 	return New(mappedValues, s.Type(), s.Name)
+}
+
+// Sum calculates the sum value of a series
+// If foce is true and an element can not be converted to float64, an NaN will be inserted (promoted). Otherwise an error will be generated.
+func (s Series) Sum(force bool) (float64, error) {
+	if s.elements.Len() == 0 || s.Type() == String || s.Type() == Bool {
+		return math.NaN(), nil
+	}
+	sFloat, err := s.Float(force)
+	if err != nil {
+		return math.NaN(), err
+	}
+	sum := sFloat[0]
+	for i := 1; i < len(sFloat); i++ {
+		elem := sFloat[i]
+		sum += elem
+	}
+	return sum, nil
 }

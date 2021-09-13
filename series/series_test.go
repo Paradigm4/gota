@@ -661,6 +661,76 @@ func TestSeries_Compare_Less(t *testing.T) {
 	}
 }
 
+func TestSeries_Compare_CompFunc(t *testing.T) {
+	table := []struct {
+		series     Series
+		comparator Comparator
+		comparando interface{}
+		expected   Series
+		panic      bool
+	}{
+		{
+			Strings([]string{"A", "B", "C", "B", "D", "BADA"}),
+			CompFunc,
+			func(el Element) bool {
+				if el.Type() == String {
+					if val, ok := el.Val().(string); ok {
+						return strings.HasPrefix(val, "B")
+					}
+					return false
+				}
+				return false
+			},
+			Bools([]bool{false, true, false, true, false, true}),
+			false,
+		},
+		{
+			Strings([]string{"A", "B", "C", "B", "D", "BADA"}),
+			CompFunc,
+			func(el Element) {},
+			Bools([]bool{false, false, false, false, false}),
+			true,
+		},
+	}
+	for testnum, test := range table {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					// recovered
+					if !test.panic {
+						t.Errorf("did not expected panic but was '%v'", r)
+					}
+				} else {
+					// nothing to recover from
+					if test.panic {
+						t.Errorf("exptected panic but did not panic")
+					}
+				}
+			}()
+
+			a := test.series
+			b := a.Compare(test.comparator, test.comparando)
+			if err := b.Err; err != nil {
+				t.Errorf("Test:%v\nError:%v", testnum, err)
+			}
+			expected, _ := test.expected.Records(true)
+			received, _ := b.Records(true)
+			if !reflect.DeepEqual(expected, received) {
+				t.Errorf(
+					"Test:%v\nExpected:\n%v\nReceived:\n%v",
+					testnum, expected, received,
+				)
+			}
+			if err := checkTypes(b); err != nil {
+				t.Errorf(
+					"Test:%v\nError:%v",
+					testnum, err,
+				)
+			}
+		}()
+	}
+}
+
 func TestSeries_Subset(t *testing.T) {
 	table := []struct {
 		series   Series
@@ -2340,6 +2410,53 @@ func TestSeries_Map(t *testing.T) {
 				}
 			}
 		default:
+		}
+	}
+}
+
+func TestSeries_Sum(t *testing.T) {
+	tests := []struct {
+		series   Series
+		expected float64
+	}{
+		{
+			// Extreme observations should not factor in.
+			Ints([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 100, 1000, 10000}),
+			11155,
+		},
+		{
+			// Change in order should influence result.
+			Ints([]int{1, 2, 3, 10, 100, 1000, 10000, 4, 5, 6, 7, 8, 9}),
+			11155,
+		},
+		{
+			Floats([]float64{20.2755, 4.98964, -20.2006, 1.19854, 1.89977,
+				1.51178, -17.4687, 4.65567, -8.65952, 6.31649,
+			}),
+			-5.481429999999998,
+		},
+		{
+			Strings([]string{"A", "B", "C", "D"}),
+			math.NaN(),
+		},
+		{
+			Bools([]bool{true, true, false, true}),
+			math.NaN(),
+		},
+		{
+			Floats([]float64{}),
+			math.NaN(),
+		},
+	}
+
+	for testnum, test := range tests {
+		received, _ := test.series.Sum(true)
+		expected := test.expected
+		if !compareFloats(received, expected, 6) {
+			t.Errorf(
+				"Test:%v\nExpected:\n%v\nReceived:\n%v",
+				testnum, expected, received,
+			)
 		}
 	}
 }
