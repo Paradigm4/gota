@@ -979,6 +979,10 @@ func TestInts(t *testing.T) {
 			"[NaN  1 2]",
 		},
 		{
+			Ints([]string{"1e+5", "", "1.1e+5", "2.11e+1"}),
+			"[100000  110000 NaN]",
+		},
+		{
 			Ints([]string{"1"}),
 			"[1]",
 		},

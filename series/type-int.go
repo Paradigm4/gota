@@ -31,8 +31,18 @@ func (e *IntElement) Set(value interface{}) error {
 		default:
 			i, err := strconv.ParseInt(value.(string), 10, 64)
 			if err != nil {
-				e.nan = true
-				return err
+				// try to see if scientific notation
+				f, err := strconv.ParseFloat(value.(string), 64)
+				if err != nil {
+					e.nan = true
+					return err
+				}
+				// check for loss of precision
+				i = int64(f)
+				if f != float64(i) {
+					e.nan = true
+					return fmt.Errorf("Float given resulting in loss of precision")
+				}
 			}
 			e.e = i
 		}
